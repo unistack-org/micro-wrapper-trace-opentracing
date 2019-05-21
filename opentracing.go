@@ -60,6 +60,16 @@ func (o *otWrapper) Call(ctx context.Context, req client.Request, rsp interface{
 	return o.Client.Call(ctx, req, rsp, opts...)
 }
 
+func (o *otWrapper) Stream(ctx context.Context, req client.Request, opts ...client.CallOption) (client.Stream, error) {
+	name := fmt.Sprintf("%s.%s", req.Service(), req.Endpoint())
+	ctx, span, err := StartSpanFromContext(ctx, o.ot, name)
+	if err != nil {
+		return nil, err
+	}
+	defer span.Finish()
+	return o.Client.Stream(ctx, req, opts...)
+}
+
 func (o *otWrapper) Publish(ctx context.Context, p client.Message, opts ...client.PublishOption) error {
 	name := fmt.Sprintf("Pub to %s", p.Topic())
 	ctx, span, err := StartSpanFromContext(ctx, o.ot, name)
