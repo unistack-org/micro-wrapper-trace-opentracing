@@ -2,17 +2,15 @@
 package opentracing
 
 import (
+	"context"
 	"fmt"
 
-	"context"
-	"strings"
-
-	"github.com/micro/go-micro/v2/client"
-	"github.com/micro/go-micro/v2/metadata"
-	"github.com/micro/go-micro/v2/registry"
-	"github.com/micro/go-micro/v2/server"
 	opentracing "github.com/opentracing/opentracing-go"
 	opentracinglog "github.com/opentracing/opentracing-go/log"
+	"github.com/unistack-org/micro/v3/client"
+	"github.com/unistack-org/micro/v3/metadata"
+	"github.com/unistack-org/micro/v3/registry"
+	"github.com/unistack-org/micro/v3/server"
 )
 
 type otWrapper struct {
@@ -47,7 +45,7 @@ func StartSpanFromContext(ctx context.Context, tracer opentracing.Tracer, name s
 	}
 
 	for k, v := range nmd {
-		md.Set(strings.Title(k), v)
+		md.Set(k, v)
 	}
 
 	ctx = opentracing.ContextWithSpan(ctx, sp)
