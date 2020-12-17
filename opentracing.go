@@ -4,12 +4,18 @@ package opentracing
 import (
 	"context"
 	"fmt"
+	"net/textproto"
 
 	opentracing "github.com/opentracing/opentracing-go"
 	opentracinglog "github.com/opentracing/opentracing-go/log"
 	"github.com/unistack-org/micro/v3/client"
 	"github.com/unistack-org/micro/v3/metadata"
 	"github.com/unistack-org/micro/v3/server"
+)
+
+var (
+	// MetadataKey contains metadata key
+	MetadataKey = textproto.CanonicalMIMEHeaderKey("x-request-id")
 )
 
 type otWrapper struct {
@@ -105,6 +111,9 @@ func DefaultClientCallObserver(ctx context.Context, req client.Request, rsp inte
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
+	if id, ok := metadata.Get(ctx, MetadataKey); ok {
+		sp.SetTag(MetadataKey, id)
+	}
 }
 
 func DefaultClientStreamObserver(ctx context.Context, req client.Request, opts []client.CallOption, stream client.Stream, sp opentracing.Span, err error) {
@@ -112,6 +121,9 @@ func DefaultClientStreamObserver(ctx context.Context, req client.Request, opts [
 	if err != nil {
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
+	}
+	if id, ok := metadata.Get(ctx, MetadataKey); ok {
+		sp.SetTag(MetadataKey, id)
 	}
 }
 
@@ -121,6 +133,9 @@ func DefaultClientPublishObserver(ctx context.Context, msg client.Message, opts 
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
+	if id, ok := metadata.Get(ctx, MetadataKey); ok {
+		sp.SetTag(MetadataKey, id)
+	}
 }
 
 func DefaultServerHandlerObserver(ctx context.Context, req server.Request, rsp interface{}, sp opentracing.Span, err error) {
@@ -128,6 +143,9 @@ func DefaultServerHandlerObserver(ctx context.Context, req server.Request, rsp i
 	if err != nil {
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
+	}
+	if id, ok := metadata.Get(ctx, MetadataKey); ok {
+		sp.SetTag(MetadataKey, id)
 	}
 }
 
@@ -137,6 +155,9 @@ func DefaultServerSubscriberObserver(ctx context.Context, msg server.Message, sp
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
+	if id, ok := metadata.Get(ctx, MetadataKey); ok {
+		sp.SetTag(MetadataKey, id)
+	}
 }
 
 func DefaultClientCallFuncObserver(ctx context.Context, addr string, req client.Request, rsp interface{}, opts client.CallOptions, sp opentracing.Span, err error) {
@@ -144,6 +165,9 @@ func DefaultClientCallFuncObserver(ctx context.Context, addr string, req client.
 	if err != nil {
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
+	}
+	if id, ok := metadata.Get(ctx, MetadataKey); ok {
+		sp.SetTag(MetadataKey, id)
 	}
 }
 
