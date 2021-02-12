@@ -150,7 +150,7 @@ func DefaultServerHandlerObserver(ctx context.Context, req server.Request, rsp i
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
-	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if id, ok := md.Get(MetadataKey); ok {
 			sp.SetTag(MetadataKey, id)
 		}
@@ -163,7 +163,7 @@ func DefaultServerSubscriberObserver(ctx context.Context, msg server.Message, sp
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
-	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if id, ok := md.Get(MetadataKey); ok {
 			sp.SetTag(MetadataKey, id)
 		}
@@ -183,28 +183,31 @@ func DefaultClientCallFuncObserver(ctx context.Context, addr string, req client.
 	}
 }
 
-// StartSpanFromContext returns a new span with the given operation name and options. If a span
+// StartSpanFromOutgoingContext returns a new span with the given operation name and options. If a span
 // is found in the context, it will be used as the parent of the resulting span.
-func StartSpanFromContext(ctx context.Context, tracer opentracing.Tracer, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span, error) {
-	md, ok := metadata.FromContext(ctx)
-	if !ok {
-		md = make(metadata.Metadata)
-	}
+func StartSpanFromOutgoingContext(ctx context.Context, tracer opentracing.Tracer, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span, error) {
+	var parentCtx opentracing.SpanContext
 
+	md, ok := metadata.FromIncomingContext(ctx)
 	// Find parent span.
-	// First try to get span within current service boundary.
-	// If there doesn't exist, try to get it from metadata(which is cross boundary)
 	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
-		opts = append(opts, opentracing.ChildOf(parentSpan.Context()))
-	} else if spanCtx, err := tracer.Extract(opentracing.TextMap, opentracing.TextMapCarrier(md)); err == nil {
-		opts = append(opts, opentracing.ChildOf(spanCtx))
+		// First try to get span within current service boundary.
+		parentCtx = parentSpan.Context()
+	} else if spanCtx, err := tracer.Extract(opentracing.TextMap, opentracing.TextMapCarrier(md)); err == nil && ok {
+		// If there doesn't exist, try to get it from metadata(which is cross boundary)
+		parentCtx = spanCtx
 	}
 
-	// allocate new map with only one element
+	if parentCtx != nil {
+		opts = append(opts, opentracing.ChildOf(parentCtx))
+	}
+
+	if !ok {
+		md = metadata.New(1)
+	}
 	nmd := metadata.New(1)
 
 	sp := tracer.StartSpan(name, opts...)
-
 	if err := sp.Tracer().Inject(sp.Context(), opentracing.TextMap, opentracing.TextMapCarrier(nmd)); err != nil {
 		return nil, nil, err
 	}
@@ -213,14 +216,51 @@ func StartSpanFromContext(ctx context.Context, tracer opentracing.Tracer, name s
 		md.Set(k, v)
 	}
 
-	ctx = opentracing.ContextWithSpan(ctx, sp)
-	ctx = metadata.NewOutgoingContext(ctx, md)
+	ctx = metadata.NewOutgoingContext(opentracing.ContextWithSpan(ctx, sp), md)
+
+	return ctx, sp, nil
+}
+
+// StartSpanFromIncomingContext returns a new span with the given operation name and options. If a span
+// is found in the context, it will be used as the parent of the resulting span.
+func StartSpanFromIncomingContext(ctx context.Context, tracer opentracing.Tracer, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span, error) {
+	var parentCtx opentracing.SpanContext
+
+	// Find parent span.
+	md, ok := metadata.FromIncomingContext(ctx)
+	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
+		// First try to get span within current service boundary.
+		parentCtx = parentSpan.Context()
+	} else if spanCtx, err := tracer.Extract(opentracing.TextMap, opentracing.TextMapCarrier(md)); err == nil && ok {
+		// If there doesn't exist, try to get it from metadata(which is cross boundary)
+		parentCtx = spanCtx
+	}
+
+	if parentCtx != nil {
+		opts = append(opts, opentracing.ChildOf(parentCtx))
+	}
+
+	if !ok {
+		md = metadata.New(1)
+	}
+	nmd := metadata.New(1)
+
+	sp := tracer.StartSpan(name, opts...)
+	if err := sp.Tracer().Inject(sp.Context(), opentracing.TextMap, opentracing.TextMapCarrier(nmd)); err != nil {
+		return nil, nil, err
+	}
+
+	for k, v := range nmd {
+		md.Set(k, v)
+	}
+
+	ctx = metadata.NewIncomingContext(opentracing.ContextWithSpan(ctx, sp), md)
 
 	return ctx, sp, nil
 }
 
 func (ot *otWrapper) Call(ctx context.Context, req client.Request, rsp interface{}, opts ...client.CallOption) error {
-	ctx, sp, err := StartSpanFromContext(ctx, ot.opts.Tracer, "")
+	ctx, sp, err := StartSpanFromOutgoingContext(ctx, ot.opts.Tracer, "")
 	if err != nil {
 		return err
 	}
@@ -236,7 +276,7 @@ func (ot *otWrapper) Call(ctx context.Context, req client.Request, rsp interface
 }
 
 func (ot *otWrapper) Stream(ctx context.Context, req client.Request, opts ...client.CallOption) (client.Stream, error) {
-	ctx, sp, err := StartSpanFromContext(ctx, ot.opts.Tracer, "")
+	ctx, sp, err := StartSpanFromOutgoingContext(ctx, ot.opts.Tracer, "")
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +292,7 @@ func (ot *otWrapper) Stream(ctx context.Context, req client.Request, opts ...cli
 }
 
 func (ot *otWrapper) Publish(ctx context.Context, msg client.Message, opts ...client.PublishOption) error {
-	ctx, sp, err := StartSpanFromContext(ctx, ot.opts.Tracer, "")
+	ctx, sp, err := StartSpanFromOutgoingContext(ctx, ot.opts.Tracer, "")
 	if err != nil {
 		return err
 	}
@@ -268,7 +308,7 @@ func (ot *otWrapper) Publish(ctx context.Context, msg client.Message, opts ...cl
 }
 
 func (ot *otWrapper) ServerHandler(ctx context.Context, req server.Request, rsp interface{}) error {
-	ctx, sp, err := StartSpanFromContext(ctx, ot.opts.Tracer, "")
+	ctx, sp, err := StartSpanFromIncomingContext(ctx, ot.opts.Tracer, "")
 	if err != nil {
 		return err
 	}
@@ -284,7 +324,7 @@ func (ot *otWrapper) ServerHandler(ctx context.Context, req server.Request, rsp 
 }
 
 func (ot *otWrapper) ServerSubscriber(ctx context.Context, msg server.Message) error {
-	ctx, sp, err := StartSpanFromContext(ctx, ot.opts.Tracer, "")
+	ctx, sp, err := StartSpanFromIncomingContext(ctx, ot.opts.Tracer, "")
 	if err != nil {
 		return err
 	}
@@ -324,7 +364,7 @@ func NewClientCallWrapper(opts ...Option) client.CallWrapper {
 }
 
 func (ot *otWrapper) ClientCallFunc(ctx context.Context, addr string, req client.Request, rsp interface{}, opts client.CallOptions) error {
-	ctx, sp, err := StartSpanFromContext(ctx, ot.opts.Tracer, "")
+	ctx, sp, err := StartSpanFromOutgoingContext(ctx, ot.opts.Tracer, "")
 	if err != nil {
 		return err
 	}
