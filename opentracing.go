@@ -111,8 +111,10 @@ func DefaultClientCallObserver(ctx context.Context, req client.Request, rsp inte
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
-	if id, ok := metadata.Get(ctx, MetadataKey); ok {
-		sp.SetTag(MetadataKey, id)
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		if id, ok := md.Get(MetadataKey); ok {
+			sp.SetTag(MetadataKey, id)
+		}
 	}
 }
 
@@ -122,8 +124,10 @@ func DefaultClientStreamObserver(ctx context.Context, req client.Request, opts [
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
-	if id, ok := metadata.Get(ctx, MetadataKey); ok {
-		sp.SetTag(MetadataKey, id)
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		if id, ok := md.Get(MetadataKey); ok {
+			sp.SetTag(MetadataKey, id)
+		}
 	}
 }
 
@@ -133,8 +137,10 @@ func DefaultClientPublishObserver(ctx context.Context, msg client.Message, opts 
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
-	if id, ok := metadata.Get(ctx, MetadataKey); ok {
-		sp.SetTag(MetadataKey, id)
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		if id, ok := md.Get(MetadataKey); ok {
+			sp.SetTag(MetadataKey, id)
+		}
 	}
 }
 
@@ -144,8 +150,10 @@ func DefaultServerHandlerObserver(ctx context.Context, req server.Request, rsp i
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
-	if id, ok := metadata.Get(ctx, MetadataKey); ok {
-		sp.SetTag(MetadataKey, id)
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		if id, ok := md.Get(MetadataKey); ok {
+			sp.SetTag(MetadataKey, id)
+		}
 	}
 }
 
@@ -155,8 +163,10 @@ func DefaultServerSubscriberObserver(ctx context.Context, msg server.Message, sp
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
-	if id, ok := metadata.Get(ctx, MetadataKey); ok {
-		sp.SetTag(MetadataKey, id)
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		if id, ok := md.Get(MetadataKey); ok {
+			sp.SetTag(MetadataKey, id)
+		}
 	}
 }
 
@@ -166,8 +176,10 @@ func DefaultClientCallFuncObserver(ctx context.Context, addr string, req client.
 		sp.LogFields(opentracinglog.Error(err))
 		sp.SetTag("error", true)
 	}
-	if id, ok := metadata.Get(ctx, MetadataKey); ok {
-		sp.SetTag(MetadataKey, id)
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		if id, ok := md.Get(MetadataKey); ok {
+			sp.SetTag(MetadataKey, id)
+		}
 	}
 }
 
@@ -189,7 +201,7 @@ func StartSpanFromContext(ctx context.Context, tracer opentracing.Tracer, name s
 	}
 
 	// allocate new map with only one element
-	nmd := make(metadata.Metadata, 1)
+	nmd := metadata.New(1)
 
 	sp := tracer.StartSpan(name, opts...)
 
@@ -202,7 +214,7 @@ func StartSpanFromContext(ctx context.Context, tracer opentracing.Tracer, name s
 	}
 
 	ctx = opentracing.ContextWithSpan(ctx, sp)
-	ctx = metadata.NewContext(ctx, md)
+	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	return ctx, sp, nil
 }
