@@ -240,21 +240,23 @@ func StartSpanFromIncomingContext(ctx context.Context, tracer opentracing.Tracer
 		opts = append(opts, opentracing.ChildOf(parentCtx))
 	}
 
-	if !ok {
-		md = metadata.New(1)
+	var nmd metadata.Metadata
+	if ok {
+		nmd = metadata.New(len(md))
+	} else {
+		nmd = metadata.New(0)
 	}
-	nmd := metadata.New(1)
 
 	sp := tracer.StartSpan(name, opts...)
 	if err := sp.Tracer().Inject(sp.Context(), opentracing.TextMap, opentracing.TextMapCarrier(nmd)); err != nil {
 		return nil, nil, err
 	}
 
-	for k, v := range nmd {
-		md.Set(k, v)
+	for k, v := range md {
+		nmd.Set(k, v)
 	}
 
-	ctx = metadata.NewIncomingContext(opentracing.ContextWithSpan(ctx, sp), md)
+	ctx = metadata.NewIncomingContext(opentracing.ContextWithSpan(ctx, sp), nmd)
 
 	return ctx, sp, nil
 }
